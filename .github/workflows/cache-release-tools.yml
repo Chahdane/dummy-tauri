@@ -1,0 +1,44 @@
+name: Cache release tools
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/cache-release-tools.yml"
+      - ".github/workflows/release.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cache:
+    name: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore release binaries
+        id: release-tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-tauri
+            ~/.cargo/bin/cargo-tauri.exe
+            ~/.cargo/bin/delta-release
+            ~/.cargo/bin/delta-release.exe
+            ~/.cargo/bin/release-check
+            ~/.cargo/bin/release-check.exe
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+          key: release-tools-${{ runner.os }}-tauri-2.10.1-delta-0.1.0
+
+      - name: Install pinned release tools
+        if: steps.release-tools.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          cargo install tauri-cli --version =2.10.1 --locked
+          cargo install --locked tauri-updater-delta-release
