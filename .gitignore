@@ -1,0 +1,9 @@
+/src-tauri/target/
+/.cargo-install-target/
+/.cargo-tmp/
+/.reference-tauri-updater/
+/.tool-downloads/
+/dist/
+*.key
+*.password
+.DS_Store

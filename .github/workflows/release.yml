@@ -1,0 +1,263 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "app-v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  macos:
+    name: macOS (darwin-aarch64)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Cache release binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-tauri
+            ~/.cargo/bin/delta-release
+            ~/.cargo/bin/release-check
+          key: release-tools-${{ runner.os }}-tauri-2.10.1-delta-0.1.0
+
+      - name: Install pinned release tools
+        shell: bash
+        run: |
+          cargo install tauri-cli --version =2.10.1 --locked
+          cargo install --locked tauri-updater-delta-release
+
+      - name: Build macOS updater artifact
+        shell: bash
+        run: cargo tauri build
+
+      - name: Generate and verify macOS release files
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#app-v}"
+          INSTALLER="src-tauri/target/release/bundle/macos/DummyTauri.app.tar.gz"
+          mkdir -p dist previous
+          cp "$INSTALLER" dist/DummyTauri.app.tar.gz
+
+          PREV_TAG="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' | grep '^app-v' | head -n 1 || true)"
+          PREV=""
+          if [[ -n "$PREV_TAG" ]]; then
+            PREV="${PREV_TAG#app-v}"
+            if gh release view "$PREV_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq 'DummyTauri.app.tar.gz'; then
+              gh release download "$PREV_TAG" --repo "$GITHUB_REPOSITORY" --pattern 'DummyTauri.app.tar.gz' --dir previous
+            else
+              PREV=""
+            fi
+          fi
+
+          args=(
+            --app-id com.chahdane.dummytauri
+            --platform darwin-aarch64
+            --target-version "$VERSION"
+            --app-config src-tauri/tauri.conf.json
+            --new-installer "$INSTALLER"
+            --installer-url "https://github.com/Chahdane/dummy-tauri/releases/download/app-v${VERSION}/DummyTauri.app.tar.gz"
+            --signature-out dist/DummyTauri.app.tar.gz.sig
+            --manifest dist/manifest.json
+          )
+
+          if [[ -n "$PREV" ]]; then
+            args+=(
+              --from-version "$PREV"
+              --previous-installer previous/DummyTauri.app.tar.gz
+              --patch-url "https://github.com/Chahdane/dummy-tauri/releases/download/app-v${VERSION}/${PREV}-to-${VERSION}.zst"
+              --patch-out "dist/${PREV}-to-${VERSION}.zst"
+              --tar-patch-url "https://github.com/Chahdane/dummy-tauri/releases/download/app-v${VERSION}/${PREV}-to-${VERSION}.tar.zst"
+              --tar-patch-out "dist/${PREV}-to-${VERSION}.tar.zst"
+              --require-tar-layer
+            )
+          fi
+
+          delta-release "${args[@]}"
+          release-check \
+            --manifest dist/manifest.json \
+            --tag "app-v${VERSION}" \
+            --app-config src-tauri/tauri.conf.json \
+            --platform darwin-aarch64 \
+            --artifact "$INSTALLER"
+
+      - name: Upload macOS release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dist
+          path: dist/
+          if-no-files-found: error
+
+  windows:
+    name: Windows (windows-x86_64)
+    needs: macos
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Cache release binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-tauri.exe
+            ~/.cargo/bin/delta-release.exe
+            ~/.cargo/bin/release-check.exe
+          key: release-tools-${{ runner.os }}-tauri-2.10.1-delta-0.1.0
+
+      - name: Install pinned release tools
+        shell: bash
+        run: |
+          cargo install tauri-cli --version =2.10.1 --locked
+          cargo install --locked tauri-updater-delta-release
+
+      - name: Download macOS release files
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-dist
+          path: dist
+
+      - name: Build Windows updater artifact
+        shell: bash
+        run: cargo tauri build
+
+      - name: Generate and verify Windows release files
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#app-v}"
+          INSTALLER="src-tauri/target/release/bundle/nsis/DummyTauri_${VERSION}_x64-setup.exe"
+          mkdir -p dist previous
+          cp "$INSTALLER" "dist/DummyTauri_${VERSION}_x64-setup.exe"
+
+          PREV_TAG="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' | grep '^app-v' | head -n 1 || true)"
+          PREV=""
+          if [[ -n "$PREV_TAG" ]]; then
+            PREV="${PREV_TAG#app-v}"
+            PREV_NAME="DummyTauri_${PREV}_x64-setup.exe"
+            if gh release view "$PREV_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$PREV_NAME"; then
+              gh release download "$PREV_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$PREV_NAME" --dir previous
+            else
+              PREV=""
+            fi
+          fi
+
+          args=(
+            --app-id com.chahdane.dummytauri
+            --platform windows-x86_64
+            --target-version "$VERSION"
+            --app-config src-tauri/tauri.conf.json
+            --new-installer "$INSTALLER"
+            --installer-url "https://github.com/Chahdane/dummy-tauri/releases/download/app-v${VERSION}/DummyTauri_${VERSION}_x64-setup.exe"
+            --signature-out "dist/DummyTauri_${VERSION}_x64-setup.exe.sig"
+            --manifest dist/manifest.json
+          )
+
+          if [[ -n "$PREV" ]]; then
+            args+=(
+              --from-version "$PREV"
+              --previous-installer "previous/DummyTauri_${PREV}_x64-setup.exe"
+              --patch-url "https://github.com/Chahdane/dummy-tauri/releases/download/app-v${VERSION}/${PREV}-to-${VERSION}-windows.zst"
+              --patch-out "dist/${PREV}-to-${VERSION}-windows.zst"
+            )
+          fi
+
+          delta-release "${args[@]}"
+
+          if [[ -n "$PREV" && ! -f "dist/${PREV}-to-${VERSION}-windows.zst" ]]; then
+            echo "WARNING: Windows patch was at least 30% of Full and was deleted by delta-release."
+          fi
+
+          release-check \
+            --manifest dist/manifest.json \
+            --tag "app-v${VERSION}" \
+            --app-config src-tauri/tauri.conf.json \
+            --platform windows-x86_64 \
+            --artifact "$INSTALLER"
+
+      - name: Publish release and size summary
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#app-v}"
+          WIN_INSTALLER="DummyTauri_${VERSION}_x64-setup.exe"
+          assets=(
+            dist/manifest.json
+            dist/DummyTauri.app.tar.gz
+            dist/DummyTauri.app.tar.gz.sig
+            "dist/${WIN_INSTALLER}"
+            "dist/${WIN_INSTALLER}.sig"
+          )
+
+          PREV_TAG="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' | grep '^app-v' | head -n 1 || true)"
+          PREV=""
+          if [[ -n "$PREV_TAG" ]]; then
+            PREV="${PREV_TAG#app-v}"
+            [[ -f "dist/${PREV}-to-${VERSION}.zst" ]] && assets+=("dist/${PREV}-to-${VERSION}.zst")
+            [[ -f "dist/${PREV}-to-${VERSION}.tar.zst" ]] && assets+=("dist/${PREV}-to-${VERSION}.tar.zst")
+            [[ -f "dist/${PREV}-to-${VERSION}-windows.zst" ]] && assets+=("dist/${PREV}-to-${VERSION}-windows.zst")
+          fi
+
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "DummyTauri ${VERSION}" \
+            --notes "Signed DummyTauri ${VERSION} updater release." \
+            "${assets[@]}"
+
+          size_of() {
+            if [[ -f "$1" ]]; then stat -c%s "$1"; else echo 0; fi
+          }
+          percent_of() {
+            awk -v patch="$1" -v full="$2" 'BEGIN { if (patch == 0 || full == 0) print "—"; else printf "%.2f%%", (patch * 100 / full) }'
+          }
+
+          MAC_FULL="$(size_of dist/DummyTauri.app.tar.gz)"
+          WIN_FULL="$(size_of "dist/${WIN_INSTALLER}")"
+          MAC_DIRECT=0
+          MAC_TAR=0
+          WIN_DIRECT=0
+          if [[ -n "$PREV" ]]; then
+            MAC_DIRECT="$(size_of "dist/${PREV}-to-${VERSION}.zst")"
+            MAC_TAR="$(size_of "dist/${PREV}-to-${VERSION}.tar.zst")"
+            WIN_DIRECT="$(size_of "dist/${PREV}-to-${VERSION}-windows.zst")"
+          fi
+
+          {
+            echo "### Release size summary"
+            echo
+            echo "| Platform | Full bytes | Patch | Patch bytes | Patch / Full |"
+            echo "| --- | ---: | --- | ---: | ---: |"
+            echo "| macOS | ${MAC_FULL} | Direct | ${MAC_DIRECT} | $(percent_of "$MAC_DIRECT" "$MAC_FULL") |"
+            echo "| macOS | ${MAC_FULL} | Tar | ${MAC_TAR} | $(percent_of "$MAC_TAR" "$MAC_FULL") |"
+            echo "| Windows | ${WIN_FULL} | Direct | ${WIN_DIRECT} | $(percent_of "$WIN_DIRECT" "$WIN_FULL") |"
+          } | tee -a "$GITHUB_STEP_SUMMARY"

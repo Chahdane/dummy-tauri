@@ -1,0 +1,41 @@
+name: Bootstrap Windows validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install pinned tools
+        shell: bash
+        run: |
+          cargo install tauri-cli --version =2.10.1 --locked
+          cargo install --locked tauri-updater-delta-release
+
+      - name: Validate and build
+        shell: bash
+        run: |
+          cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+          cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+          cargo tauri build
+
+      - name: Upload release tools for the policy-restricted development machine
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-tools
+          path: |
+            ~\.cargo\bin\delta-release.exe
+            ~\.cargo\bin\release-check.exe
+          if-no-files-found: error

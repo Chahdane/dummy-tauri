@@ -1,0 +1,101 @@
+:root {
+  color: #eaf9ff;
+  background: #080d2d;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at top, rgba(37, 212, 238, 0.2), transparent 45%),
+    #080d2d;
+}
+
+.card {
+  width: min(420px, calc(100vw - 40px));
+  padding: 34px;
+  border: 1px solid rgba(113, 227, 245, 0.24);
+  border-radius: 24px;
+  background: rgba(12, 20, 65, 0.88);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+  text-align: center;
+}
+
+.logo {
+  width: 88px;
+  height: 88px;
+  border-radius: 22px;
+}
+
+.eyebrow {
+  margin: 22px 0 6px;
+  color: #67e8f9;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+h1 {
+  margin: 0 0 26px;
+  font-size: 2rem;
+}
+
+dl {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 24px;
+  text-align: left;
+}
+
+dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+dt {
+  color: #aeb9d8;
+}
+
+dd {
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+}
+
+button {
+  width: 100%;
+  padding: 13px 18px;
+  border: 0;
+  border-radius: 12px;
+  color: #07102d;
+  background: linear-gradient(135deg, #55f5c5, #27c9f5);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+#status {
+  min-height: 1.4em;
+  margin: 18px 0 0;
+  color: #c9d5f2;
+  font-size: 0.92rem;
+}
