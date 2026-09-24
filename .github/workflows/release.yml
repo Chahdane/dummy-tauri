@@ -44,7 +44,21 @@ jobs:
 
       - name: Build macOS updater artifact
         shell: bash
-        run: cargo tauri build --no-sign
+        run: |
+          set -uo pipefail
+          set +e
+          cargo tauri build 2>&1 | tee tauri-build.log
+          build_status=${PIPESTATUS[0]}
+          set -e
+          installer="src-tauri/target/release/bundle/macos/DummyTauri.app.tar.gz"
+          if [[ "$build_status" -ne 0 ]]; then
+            if [[ -f "$installer" ]] \
+              && grep -Fq 'A public key has been found, but no private key' tauri-build.log; then
+              echo "::notice::Tauri produced the unsigned updater artifact; delta-release will sign it."
+            else
+              exit "$build_status"
+            fi
+          fi
 
       - name: Generate and verify macOS release files
         shell: bash
@@ -147,7 +161,22 @@ jobs:
 
       - name: Build Windows updater artifact
         shell: bash
-        run: cargo tauri build --no-sign
+        run: |
+          set -uo pipefail
+          set +e
+          cargo tauri build 2>&1 | tee tauri-build.log
+          build_status=${PIPESTATUS[0]}
+          set -e
+          version="${GITHUB_REF_NAME#app-v}"
+          installer="src-tauri/target/release/bundle/nsis/DummyTauri_${version}_x64-setup.exe"
+          if [[ "$build_status" -ne 0 ]]; then
+            if [[ -f "$installer" ]] \
+              && grep -Fq 'A public key has been found, but no private key' tauri-build.log; then
+              echo "::notice::Tauri produced the unsigned updater artifact; delta-release will sign it."
+            else
+              exit "$build_status"
+            fi
+          fi
 
       - name: Generate and verify Windows release files
         shell: bash
