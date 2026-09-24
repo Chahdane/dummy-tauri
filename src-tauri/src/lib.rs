@@ -4,7 +4,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_updater_delta::{DeltaUpdaterExt, Outcome};
 
-const BUILD_LABEL: &str = "Initial release build";
+const BUILD_LABEL: &str = "Second release build";
 const RESULT_FILE: &str = "last-update-result.txt";
 
 #[derive(Serialize)]
