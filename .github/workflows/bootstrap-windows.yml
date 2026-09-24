@@ -29,7 +29,7 @@ jobs:
         run: |
           cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
           cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
-          cargo tauri build
+          cargo tauri build --no-sign
 
       - name: Upload release tools for the policy-restricted development machine
         if: always()

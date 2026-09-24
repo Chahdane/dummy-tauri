@@ -44,7 +44,7 @@ jobs:
 
       - name: Build macOS updater artifact
         shell: bash
-        run: cargo tauri build
+        run: cargo tauri build --no-sign
 
       - name: Generate and verify macOS release files
         shell: bash
@@ -147,7 +147,7 @@ jobs:
 
       - name: Build Windows updater artifact
         shell: bash
-        run: cargo tauri build
+        run: cargo tauri build --no-sign
 
       - name: Generate and verify Windows release files
         shell: bash

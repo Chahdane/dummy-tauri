@@ -21,7 +21,7 @@ Validate a release build:
 ```sh
 cargo fmt --manifest-path src-tauri/Cargo.toml --check
 cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
-cargo tauri build
+cargo tauri build --no-sign
 ```
 
 The frontend is plain HTML, CSS, and JavaScript in `src/`. The Tauri crate and configuration live in `src-tauri/`.
