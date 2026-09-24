@@ -18,11 +18,19 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - name: Install pinned tools
+      - name: Install pinned Tauri CLI
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          cargo install tauri-cli --version =2.10.1 --locked
-          cargo install --locked tauri-updater-delta-release
+          mkdir -p tauri-cli-download
+          gh release download tauri-cli-v2.10.1 \
+            --repo tauri-apps/tauri \
+            --pattern cargo-tauri-x86_64-pc-windows-msvc.zip \
+            --dir tauri-cli-download
+          unzip -q tauri-cli-download/cargo-tauri-x86_64-pc-windows-msvc.zip -d tauri-cli-download
+          cp tauri-cli-download/cargo-tauri.exe "$USERPROFILE/.cargo/bin/cargo-tauri.exe"
+          cargo tauri --version
 
       - name: Validate and build
         shell: bash
@@ -30,13 +38,3 @@ jobs:
           cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
           cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
           cargo tauri build --no-sign
-
-      - name: Upload release tools for the policy-restricted development machine
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-release-tools
-          path: |
-            ~\.cargo\bin\delta-release.exe
-            ~\.cargo\bin\release-check.exe
-          if-no-files-found: error
