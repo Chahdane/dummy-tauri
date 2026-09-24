@@ -32,6 +32,8 @@ jobs:
             ~/.cargo/bin/cargo-tauri
             ~/.cargo/bin/delta-release
             ~/.cargo/bin/release-check
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
           key: release-tools-${{ runner.os }}-tauri-2.10.1-delta-0.1.0
 
       - name: Install pinned release tools
@@ -127,6 +129,8 @@ jobs:
             ~/.cargo/bin/cargo-tauri.exe
             ~/.cargo/bin/delta-release.exe
             ~/.cargo/bin/release-check.exe
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
           key: release-tools-${{ runner.os }}-tauri-2.10.1-delta-0.1.0
 
       - name: Install pinned release tools

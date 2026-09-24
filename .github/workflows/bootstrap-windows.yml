@@ -32,6 +32,7 @@ jobs:
           cargo tauri build
 
       - name: Upload release tools for the policy-restricted development machine
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: windows-release-tools
