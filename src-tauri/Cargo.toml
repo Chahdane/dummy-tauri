@@ -1,6 +1,6 @@
 [package]
 name = "dummy-tauri"
-version = "1.0.2"
+version = "1.0.3"
 description = "Minimal Tauri v2 delta updater demonstration"
 authors = ["Chahdane"]
 edition = "2021"

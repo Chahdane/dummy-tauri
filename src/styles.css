@@ -1,6 +1,6 @@
 :root {
-  color: #eaf9ff;
-  background: #080d2d;
+  color: #ecfdf5;
+  background: #04180f;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
@@ -17,16 +17,16 @@ body {
   display: grid;
   place-items: center;
   background:
-    radial-gradient(circle at top, rgba(37, 212, 238, 0.2), transparent 45%),
-    #080d2d;
+    radial-gradient(circle at top, rgba(34, 197, 94, 0.24), transparent 45%),
+    #04180f;
 }
 
 .card {
   width: min(420px, calc(100vw - 40px));
   padding: 34px;
-  border: 1px solid rgba(113, 227, 245, 0.24);
+  border: 1px solid rgba(74, 222, 128, 0.28);
   border-radius: 24px;
-  background: rgba(12, 20, 65, 0.88);
+  background: rgba(7, 38, 24, 0.9);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
   text-align: center;
 }
@@ -39,7 +39,7 @@ body {
 
 .eyebrow {
   margin: 22px 0 6px;
-  color: #67e8f9;
+  color: #4ade80;
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.16em;
@@ -67,7 +67,7 @@ dl div {
 }
 
 dt {
-  color: #aeb9d8;
+  color: #a7c9b6;
 }
 
 dd {
@@ -81,8 +81,8 @@ button {
   padding: 13px 18px;
   border: 0;
   border-radius: 12px;
-  color: #07102d;
-  background: linear-gradient(135deg, #55f5c5, #27c9f5);
+  color: #03220f;
+  background: linear-gradient(135deg, #bbf7d0, #22c55e);
   font: inherit;
   font-weight: 800;
   cursor: pointer;
@@ -96,7 +96,7 @@ button:disabled {
 #status {
   min-height: 1.4em;
   margin: 18px 0 0;
-  color: #c9d5f2;
+  color: #c6e9d4;
   font-size: 0.92rem;
 }
 
@@ -119,7 +119,7 @@ button:disabled {
 }
 
 #progress-size {
-  color: #67e8f9;
+  color: #4ade80;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -136,7 +136,7 @@ button:disabled {
   width: 0;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #55f5c5, #27c9f5);
+  background: linear-gradient(90deg, #bbf7d0, #22c55e);
   transition: width 180ms ease-out;
 }
 
@@ -158,7 +158,7 @@ button:disabled {
 .progress-detail {
   min-height: 1.2em;
   margin: 8px 0 0;
-  color: #aeb9d8;
+  color: #a7c9b6;
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
 }
@@ -168,5 +168,35 @@ button:disabled {
   .fill.indeterminate {
     transition: none;
     animation: none;
+  }
+}
+
+.updated-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 18px;
+  padding: 6px 12px;
+  border: 1px solid rgba(74, 222, 128, 0.45);
+  border-radius: 999px;
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.16);
+  font-size: 0.82rem;
+  font-weight: 800;
+  animation: pop 420ms ease-out;
+}
+
+.updated-badge[hidden] {
+  display: none;
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }

@@ -4,6 +4,7 @@ const { listen } = window.__TAURI__.event;
 const versionElement = document.querySelector("#version");
 const buildLabelElement = document.querySelector("#build-label");
 const statusElement = document.querySelector("#status");
+const updatedBadgeElement = document.querySelector("#updated-badge");
 const checkButton = document.querySelector("#check-updates");
 const progressElement = document.querySelector("#progress");
 const phaseElement = document.querySelector("#progress-phase");
@@ -85,6 +86,10 @@ async function loadAppInfo() {
     versionElement.textContent = info.version;
     buildLabelElement.textContent = info.buildLabel;
     statusElement.textContent = info.lastResult;
+    if (info.lastResult.startsWith(`Updated to ${info.version}`)) {
+      updatedBadgeElement.textContent = `✓ Updated to ${info.version}`;
+      updatedBadgeElement.hidden = false;
+    }
   } catch (error) {
     statusElement.textContent = `error: ${error}`;
   }

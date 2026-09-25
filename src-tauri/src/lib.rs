@@ -8,7 +8,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater_delta::{DeltaUpdaterExt, Outcome, ProgressEvent};
 
-const BUILD_LABEL: &str = "Second release build";
+const BUILD_LABEL: &str = "Third release build · green";
 const RESULT_FILE: &str = "last-update-result.txt";
 const PROGRESS_EVENT: &str = "update-progress";
 
