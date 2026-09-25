@@ -23,6 +23,16 @@
         </div>
       </dl>
       <button id="check-updates" type="button">Check for updates</button>
+      <section id="progress" class="progress" hidden>
+        <div class="progress-head">
+          <span id="progress-phase">Checking for updates…</span>
+          <span id="progress-size"></span>
+        </div>
+        <div class="track" role="progressbar" aria-labelledby="progress-phase">
+          <div id="progress-fill" class="fill indeterminate"></div>
+        </div>
+        <p id="progress-detail" class="progress-detail"></p>
+      </section>
       <p id="status" role="status" aria-live="polite">Loading last result…</p>
     </main>
   </body>

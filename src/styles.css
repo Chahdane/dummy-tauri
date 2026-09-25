@@ -99,3 +99,74 @@ button:disabled {
   color: #c9d5f2;
   font-size: 0.92rem;
 }
+
+.progress {
+  margin: 18px 0 0;
+  text-align: left;
+}
+
+.progress[hidden] {
+  display: none;
+}
+
+.progress-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+#progress-size {
+  color: #67e8f9;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.track {
+  position: relative;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #55f5c5, #27c9f5);
+  transition: width 180ms ease-out;
+}
+
+.fill.indeterminate {
+  position: absolute;
+  width: 35%;
+  animation: slide 1.1s ease-in-out infinite;
+}
+
+@keyframes slide {
+  from {
+    left: -35%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+.progress-detail {
+  min-height: 1.2em;
+  margin: 8px 0 0;
+  color: #aeb9d8;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fill,
+  .fill.indeterminate {
+    transition: none;
+    animation: none;
+  }
+}

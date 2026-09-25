@@ -34,13 +34,13 @@ jobs:
             ~/.cargo/bin/release-check
             ~/.cargo/.crates.toml
             ~/.cargo/.crates2.json
-          key: release-tools-${{ runner.os }}-tauri-2.10.1-delta-0.1.0
+          key: release-tools-${{ runner.os }}-tauri-2.10.1-delta-0.2.0
 
       - name: Install pinned release tools
         shell: bash
         run: |
           cargo install tauri-cli --version =2.10.1 --locked
-          cargo install --locked tauri-updater-delta-release
+          cargo install --locked tauri-updater-delta-release --version =0.2.0
 
       - name: Build macOS updater artifact
         shell: bash
@@ -145,13 +145,13 @@ jobs:
             ~/.cargo/bin/release-check.exe
             ~/.cargo/.crates.toml
             ~/.cargo/.crates2.json
-          key: release-tools-${{ runner.os }}-tauri-2.10.1-delta-0.1.0
+          key: release-tools-${{ runner.os }}-tauri-2.10.1-delta-0.2.0
 
       - name: Install pinned release tools
         shell: bash
         run: |
           cargo install tauri-cli --version =2.10.1 --locked
-          cargo install --locked tauri-updater-delta-release
+          cargo install --locked tauri-updater-delta-release --version =0.2.0
 
       - name: Download macOS release files
         uses: actions/download-artifact@v4
@@ -212,6 +212,8 @@ jobs:
             --installer-url "https://github.com/Chahdane/dummy-tauri/releases/download/app-v${VERSION}/DummyTauri_${VERSION}_x64-setup.exe"
             --signature-out "dist/DummyTauri_${VERSION}_x64-setup.exe.sig"
             --manifest dist/manifest.json
+            --compressed-full-url "https://github.com/Chahdane/dummy-tauri/releases/download/app-v${VERSION}/DummyTauri_${VERSION}_x64-setup.exe.zst"
+            --compressed-full-out "dist/DummyTauri_${VERSION}_x64-setup.exe.zst"
           )
 
           if [[ -n "$PREV" ]]; then
@@ -251,6 +253,7 @@ jobs:
             "dist/${WIN_INSTALLER}"
             "dist/${WIN_INSTALLER}.sig"
           )
+          [[ -f "dist/${WIN_INSTALLER}.zst" ]] && assets+=("dist/${WIN_INSTALLER}.zst")
 
           PREV_TAG="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' | grep '^app-v' | head -n 1 || true)"
           PREV=""
@@ -276,6 +279,7 @@ jobs:
 
           MAC_FULL="$(size_of dist/DummyTauri.app.tar.gz)"
           WIN_FULL="$(size_of "dist/${WIN_INSTALLER}")"
+          WIN_COMPRESSED="$(size_of "dist/${WIN_INSTALLER}.zst")"
           MAC_DIRECT=0
           MAC_TAR=0
           WIN_DIRECT=0
@@ -293,4 +297,5 @@ jobs:
             echo "| macOS | ${MAC_FULL} | Direct | ${MAC_DIRECT} | $(percent_of "$MAC_DIRECT" "$MAC_FULL") |"
             echo "| macOS | ${MAC_FULL} | Tar | ${MAC_TAR} | $(percent_of "$MAC_TAR" "$MAC_FULL") |"
             echo "| Windows | ${WIN_FULL} | Direct | ${WIN_DIRECT} | $(percent_of "$WIN_DIRECT" "$WIN_FULL") |"
+            echo "| Windows | ${WIN_FULL} | Compressed full | ${WIN_COMPRESSED} | $(percent_of "$WIN_COMPRESSED" "$WIN_FULL") |"
           } | tee -a "$GITHUB_STEP_SUMMARY"

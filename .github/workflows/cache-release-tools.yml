@@ -34,11 +34,11 @@ jobs:
             ~/.cargo/bin/release-check.exe
             ~/.cargo/.crates.toml
             ~/.cargo/.crates2.json
-          key: release-tools-${{ runner.os }}-tauri-2.10.1-delta-0.1.0
+          key: release-tools-${{ runner.os }}-tauri-2.10.1-delta-0.2.0
 
       - name: Install pinned release tools
         if: steps.release-tools.outputs.cache-hit != 'true'
         shell: bash
         run: |
           cargo install tauri-cli --version =2.10.1 --locked
-          cargo install --locked tauri-updater-delta-release
+          cargo install --locked tauri-updater-delta-release --version =0.2.0

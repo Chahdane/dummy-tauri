@@ -1,6 +1,6 @@
 [package]
 name = "dummy-tauri"
-version = "1.0.1"
+version = "1.0.2"
 description = "Minimal Tauri v2 delta updater demonstration"
 authors = ["Chahdane"]
 edition = "2021"
@@ -20,4 +20,4 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "2", features = [] }
 tauri-plugin-updater = "=2.10.1"
-tauri-plugin-updater-delta = "0.1.0"
+tauri-plugin-updater-delta = "0.2.0"
