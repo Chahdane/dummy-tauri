@@ -1,64 +1,65 @@
-use std::{
-    fs,
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use std::{fs, path::PathBuf, sync::Mutex, time::Duration};
 
-use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_updater_delta::{DeltaUpdaterExt, Outcome, ProgressEvent};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_updater::UpdaterExt;
+use tauri_plugin_updater_delta::{DeltaUpdaterExt, Outcome, ProgressEvent, Update};
 
-const BUILD_LABEL: &str = "Third release build · green";
-const RESULT_FILE: &str = "last-update-result.txt";
+const TODOS_FILE: &str = "todos.json";
+const UPDATE_RECORD_FILE: &str = "last-update.json";
 const PROGRESS_EVENT: &str = "update-progress";
+const INSTALL_HANDOFF_PAUSE: Duration = Duration::from_millis(2200);
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct AppInfo {
-    version: String,
-    build_label: &'static str,
-    last_result: String,
-}
-
-fn result_path(app: &AppHandle) -> Result<PathBuf, String> {
+fn data_path(app: &AppHandle, file: &str) -> Result<PathBuf, String> {
     let directory = app
         .path()
         .app_data_dir()
         .map_err(|error| format!("could not find app data directory: {error}"))?;
     fs::create_dir_all(&directory)
         .map_err(|error| format!("could not create app data directory: {error}"))?;
-    Ok(directory.join(RESULT_FILE))
+    Ok(directory.join(file))
 }
 
-fn persist_result(app: &AppHandle, result: &str) -> Result<(), String> {
-    fs::write(result_path(app)?, result)
-        .map_err(|error| format!("could not save update result: {error}"))
-}
-
-fn read_last_result(app: &AppHandle) -> String {
-    result_path(app)
-        .and_then(|path| {
-            fs::read_to_string(path)
-                .map_err(|error| format!("could not read last update result: {error}"))
-        })
-        .unwrap_or_else(|_| "No update checked yet".to_owned())
-}
-
+/// What the manifest says this update will cost, before anything downloads.
 #[derive(Clone, Serialize)]
-#[serde(tag = "phase", rename_all = "camelCase")]
-enum ProgressPayload {
-    Checking,
-    Found {
-        version: String,
-    },
-    #[serde(rename_all = "camelCase")]
-    Downloading {
-        downloaded: u64,
-        total: Option<u64>,
-    },
-    Reconstructing,
-    Verifying,
-    Installing,
+#[serde(rename_all = "camelCase")]
+struct UpdateInfo {
+    version: String,
+    current_version: String,
+    notes: Option<String>,
+    /// Bytes the expected source downloads: a patch when the manifest has one
+    /// from the running version, otherwise the (compressed) full installer.
+    download_size: Option<u64>,
+    full_size: Option<u64>,
+    kind: &'static str,
+}
+
+/// Saved before the installer takes over, so the next launch can say what
+/// happened. On Windows the handoff exits this process.
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateRecord {
+    from: String,
+    to: String,
+    downloaded: u64,
+    full_size: Option<u64>,
+    source: Option<String>,
+    #[serde(default)]
+    seen: bool,
+}
+
+fn write_record(app: &AppHandle, record: &UpdateRecord) {
+    if let Ok(path) = data_path(app, UPDATE_RECORD_FILE) {
+        if let Ok(json) = serde_json::to_string(record) {
+            let _ = fs::write(path, json);
+        }
+    }
+}
+
+fn read_record(app: &AppHandle) -> Option<UpdateRecord> {
+    let text = fs::read_to_string(data_path(app, UPDATE_RECORD_FILE).ok()?).ok()?;
+    serde_json::from_str(&text).ok()
 }
 
 /// Bytes downloaded across every download of one install, since a failed
@@ -82,84 +83,119 @@ impl DownloadTally {
     }
 }
 
-fn format_bytes(bytes: u64) -> String {
-    const UNITS: [&str; 4] = ["B", "KB", "MB", "GB"];
-    let mut value = bytes as f64;
-    let mut unit = 0;
-    while value >= 1000.0 && unit < UNITS.len() - 1 {
-        value /= 1000.0;
-        unit += 1;
-    }
-    if unit == 0 {
-        format!("{bytes} B")
-    } else {
-        format!("{value:.1} {}", UNITS[unit])
-    }
+#[derive(Default)]
+struct Pending {
+    update: Mutex<Option<Update>>,
+    info: Mutex<Option<UpdateInfo>>,
+    tally: Mutex<DownloadTally>,
 }
 
-fn describe_outcome(outcome: &Outcome) -> String {
-    let source = match outcome {
-        Outcome::InstalledFromFullDownload { .. } => "Full",
-        Outcome::InstalledFromCompressedFullDownload { .. } => "CompressedFull",
-        Outcome::InstalledFromDirectDelta { .. } => "DirectDelta",
-        Outcome::InstalledFromTarDelta { .. } => "TarDelta",
-        Outcome::UpToDate { .. } => return "Up to date".to_owned(),
-        _ => "Update completed",
+#[derive(Clone, Serialize)]
+#[serde(tag = "phase", rename_all = "camelCase")]
+enum ProgressPayload {
+    Downloading { downloaded: u64, total: Option<u64> },
+    Reconstructing,
+    Verifying,
+    Installing,
+}
+
+fn estimate(raw: &Value, target: &str, current: &str) -> (Option<u64>, Option<u64>, &'static str) {
+    let Some(platform) = raw.pointer(&format!("/delta/platforms/{target}")) else {
+        return (None, None, "full");
     };
-    match (outcome.downloaded_bytes(), outcome.full_artifact_size()) {
-        (Some(downloaded), Some(full)) if downloaded < full => format!(
-            "{source} · downloaded {} instead of {}",
-            format_bytes(downloaded),
-            format_bytes(full)
-        ),
-        (Some(downloaded), _) => format!("{source} · downloaded {}", format_bytes(downloaded)),
-        _ => source.to_owned(),
+    let size = |value: Option<&Value>| value.and_then(Value::as_u64);
+    let full = size(platform.get("target_installer_size"));
+    let tar_patch = platform
+        .pointer("/tar_layer/patches")
+        .and_then(|patches| patches.get(current));
+    let direct_patch = platform
+        .get("patches")
+        .and_then(|patches| patches.get(current));
+    if let Some(patch) = tar_patch.or(direct_patch) {
+        return (size(patch.get("patch_size")), full, "patch");
     }
+    if let Some(compressed) = size(platform.pointer("/compressed_full/size")) {
+        return (Some(compressed), full, "compressed");
+    }
+    (full, full, "full")
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppInfo {
+    version: String,
+    last_update: Option<UpdateRecord>,
 }
 
 #[tauri::command]
 fn app_info(app: AppHandle) -> AppInfo {
+    let version = app.package_info().version.to_string();
+    let last_update = read_record(&app).filter(|record| record.to == version);
     AppInfo {
-        version: app.package_info().version.to_string(),
-        build_label: BUILD_LABEL,
-        last_result: read_last_result(&app),
+        version,
+        last_update,
     }
 }
 
 #[tauri::command]
-async fn check_for_updates(app: AppHandle) -> Result<String, String> {
-    let tally = Arc::new(Mutex::new(DownloadTally::default()));
-    let target_version = Arc::new(Mutex::new(String::new()));
+fn acknowledge_update(app: AppHandle) {
+    if let Some(mut record) = read_record(&app) {
+        record.seen = true;
+        write_record(&app, &record);
+    }
+}
+
+#[tauri::command]
+fn load_todos(app: AppHandle) -> Option<String> {
+    fs::read_to_string(data_path(&app, TODOS_FILE).ok()?).ok()
+}
+
+#[tauri::command]
+fn save_todos(app: AppHandle, json: String) -> Result<(), String> {
+    fs::write(data_path(&app, TODOS_FILE)?, json)
+        .map_err(|error| format!("could not save tasks: {error}"))
+}
+
+#[tauri::command]
+async fn check_for_update(
+    app: AppHandle,
+    pending: State<'_, Pending>,
+) -> Result<Option<UpdateInfo>, String> {
     let progress = {
         let app = app.clone();
-        let tally = Arc::clone(&tally);
-        let target_version = Arc::clone(&target_version);
         move |event: ProgressEvent| {
+            let pending = app.state::<Pending>();
             let payload = match event {
-                ProgressEvent::Checking => ProgressPayload::Checking,
                 ProgressEvent::Downloading => ProgressPayload::Downloading {
                     downloaded: 0,
                     total: None,
                 },
                 ProgressEvent::DownloadProgress { downloaded, total } => {
-                    tally.lock().unwrap().record(downloaded);
+                    pending.tally.lock().unwrap().record(downloaded);
                     ProgressPayload::Downloading { downloaded, total }
                 }
                 ProgressEvent::Reconstructing => ProgressPayload::Reconstructing,
                 ProgressEvent::Verifying => ProgressPayload::Verifying,
                 ProgressEvent::Installing => {
-                    // On Windows the installer takes over and this process
-                    // exits, so the result is saved before the handoff.
-                    let version = target_version.lock().unwrap().clone();
-                    let downloaded = tally.lock().unwrap().total();
-                    let _ = persist_result(
-                        &app,
-                        &format!(
-                            "Updated to {version} · downloaded {}",
-                            format_bytes(downloaded)
-                        ),
-                    );
-                    ProgressPayload::Installing
+                    let _ = app.emit(PROGRESS_EVENT, ProgressPayload::Installing);
+                    // Runs on the install's blocking thread. On Windows the
+                    // handoff exits this process, so give the window a moment
+                    // to show that the update landed.
+                    std::thread::sleep(INSTALL_HANDOFF_PAUSE);
+                    if let Some(info) = pending.info.lock().unwrap().as_ref() {
+                        write_record(
+                            &app,
+                            &UpdateRecord {
+                                from: info.current_version.clone(),
+                                to: info.version.clone(),
+                                downloaded: pending.tally.lock().unwrap().total(),
+                                full_size: info.full_size,
+                                source: None,
+                                seen: false,
+                            },
+                        );
+                    }
+                    return;
                 }
                 _ => return,
             };
@@ -167,56 +203,98 @@ async fn check_for_updates(app: AppHandle) -> Result<String, String> {
         }
     };
 
-    let update = match app.delta_updater().check_with(progress).await {
-        Ok(update) => update,
-        Err(error) => {
-            let result = format!("error: update check failed: {error}");
-            let _ = persist_result(&app, &result);
-            return Err(result);
-        }
-    };
-
+    let update = app
+        .delta_updater()
+        .check_with(progress)
+        .await
+        .map_err(|error| format!("Update check failed: {error}"))?;
     let Some(update) = update else {
-        let result = "Up to date".to_owned();
-        persist_result(&app, &result)?;
-        return Ok(result);
+        *pending.update.lock().unwrap() = None;
+        return Ok(None);
     };
 
-    *target_version.lock().unwrap() = update.version().to_owned();
-    let _ = app.emit(
-        PROGRESS_EVENT,
-        ProgressPayload::Found {
-            version: update.version().to_owned(),
+    // The delta check keeps Tauri's manifest private; the official updater
+    // exposes it, including the delta section with patch and full sizes.
+    let sizes = match app.updater() {
+        Ok(updater) => match updater.check().await {
+            Ok(Some(official)) => estimate(
+                &official.raw_json,
+                &official.target,
+                update.current_version(),
+            ),
+            _ => (None, None, "full"),
         },
-    );
-
-    let outcome = match update.install().await {
-        Ok(outcome) => outcome,
-        Err(error) => {
-            let result = format!("error: update failed: {error}");
-            let _ = persist_result(&app, &result);
-            return Err(result);
-        }
+        Err(_) => (None, None, "full"),
     };
 
+    let info = UpdateInfo {
+        version: update.version().to_owned(),
+        current_version: update.current_version().to_owned(),
+        notes: update.notes().map(str::to_owned),
+        download_size: sizes.0,
+        full_size: sizes.1,
+        kind: sizes.2,
+    };
+    *pending.info.lock().unwrap() = Some(info.clone());
+    *pending.update.lock().unwrap() = Some(update);
+    Ok(Some(info))
+}
+
+#[tauri::command]
+async fn install_update(app: AppHandle, pending: State<'_, Pending>) -> Result<(), String> {
+    let update = pending
+        .update
+        .lock()
+        .unwrap()
+        .take()
+        .ok_or("No update is ready to install. Check for updates first.")?;
+    *pending.tally.lock().unwrap() = DownloadTally::default();
+
+    let outcome = update
+        .install()
+        .await
+        .map_err(|error| format!("Update failed: {error}"))?;
     for diagnostic in outcome.diagnostics() {
         log::warn!("{diagnostic}");
     }
 
-    let installed = outcome.source().is_some();
-    let result = describe_outcome(&outcome);
-    persist_result(&app, &result)?;
-    if installed {
-        app.restart();
+    let source = match &outcome {
+        Outcome::InstalledFromFullDownload { .. } => "Full",
+        Outcome::InstalledFromCompressedFullDownload { .. } => "CompressedFull",
+        Outcome::InstalledFromDirectDelta { .. } => "DirectDelta",
+        Outcome::InstalledFromTarDelta { .. } => "TarDelta",
+        _ => return Ok(()),
+    };
+    if let Some(info) = pending.info.lock().unwrap().as_ref() {
+        write_record(
+            &app,
+            &UpdateRecord {
+                from: info.current_version.clone(),
+                to: info.version.clone(),
+                downloaded: outcome
+                    .downloaded_bytes()
+                    .unwrap_or_else(|| pending.tally.lock().unwrap().total()),
+                full_size: outcome.full_artifact_size().or(info.full_size),
+                source: Some(source.to_owned()),
+                seen: false,
+            },
+        );
     }
-
-    Ok(result)
+    app.restart();
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![app_info, check_for_updates])
+        .manage(Pending::default())
+        .invoke_handler(tauri::generate_handler![
+            app_info,
+            acknowledge_update,
+            load_todos,
+            save_todos,
+            check_for_update,
+            install_update
+        ])
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_updater_delta::Builder::new().build())
         .run(tauri::generate_context!())

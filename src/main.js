@@ -1,116 +1,154 @@
+import { formatBytes, initUpdater, savingsPercent } from "./update.js";
+
 const { invoke } = window.__TAURI__.core;
-const { listen } = window.__TAURI__.event;
 
-const versionElement = document.querySelector("#version");
-const buildLabelElement = document.querySelector("#build-label");
-const statusElement = document.querySelector("#status");
-const updatedBadgeElement = document.querySelector("#updated-badge");
-const checkButton = document.querySelector("#check-updates");
-const progressElement = document.querySelector("#progress");
-const phaseElement = document.querySelector("#progress-phase");
-const sizeElement = document.querySelector("#progress-size");
-const fillElement = document.querySelector("#progress-fill");
-const trackElement = fillElement.parentElement;
-const detailElement = document.querySelector("#progress-detail");
+const list = document.querySelector("#task-list");
+const composer = document.querySelector("#composer");
+const input = document.querySelector("#composer-input");
+const remaining = document.querySelector("#remaining");
+const empty = document.querySelector("#empty");
+const clearDone = document.querySelector("#clear-done");
+const toast = document.querySelector("#toast");
 
-let targetVersion = "";
+const STARTER_TASKS = [
+  "Click “Check for updates” below",
+  "Watch how small the update is",
+  "Add a task of your own",
+];
 
-function formatBytes(bytes) {
-  const units = ["B", "KB", "MB", "GB"];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1000 && unit < units.length - 1) {
-    value /= 1000;
-    unit += 1;
-  }
-  return unit === 0 ? `${bytes} B` : `${value.toFixed(1)} ${units[unit]}`;
+let tasks = [];
+
+function newTask(text, done = false) {
+  return { id: crypto.randomUUID(), text, done, createdAt: Date.now() };
 }
 
-function showPhase(label, { percent = null, size = "", detail = "" } = {}) {
-  progressElement.hidden = false;
-  phaseElement.textContent = label;
-  sizeElement.textContent = size;
-  detailElement.textContent = detail;
-  if (percent === null) {
-    fillElement.classList.add("indeterminate");
-    fillElement.style.width = "";
-    trackElement.removeAttribute("aria-valuenow");
+function save() {
+  invoke("save_todos", { json: JSON.stringify(tasks) }).catch((error) =>
+    console.error("saving tasks failed", error),
+  );
+}
+
+function render() {
+  list.replaceChildren(...tasks.map(renderTask));
+  const left = tasks.filter((task) => !task.done).length;
+  remaining.textContent = `${left} ${left === 1 ? "task" : "tasks"} left`;
+  empty.hidden = tasks.length > 0;
+  clearDone.disabled = !tasks.some((task) => task.done);
+}
+
+function renderTask(task) {
+  const item = document.createElement("li");
+  item.className = "task";
+  item.dataset.id = task.id;
+  item.classList.toggle("done", task.done);
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "check";
+  toggle.dataset.action = "toggle";
+  toggle.setAttribute("aria-label", task.done ? "Mark as not done" : "Mark as done");
+  toggle.innerHTML = '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>';
+
+  const text = document.createElement("span");
+  text.className = "task-text";
+  text.textContent = task.text;
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "remove";
+  remove.dataset.action = "remove";
+  remove.setAttribute("aria-label", "Delete task");
+  remove.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" /></svg>';
+
+  item.append(toggle, text, remove);
+  return item;
+}
+
+function removeWithAnimation(ids) {
+  const items = ids
+    .map((id) => list.querySelector(`[data-id="${id}"]`))
+    .filter(Boolean);
+  for (const item of items) item.classList.add("leaving");
+  setTimeout(() => {
+    tasks = tasks.filter((task) => !ids.includes(task.id));
+    save();
+    render();
+  }, items.length ? 220 : 0);
+}
+
+composer.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const text = input.value.trim();
+  if (!text) return;
+  const task = newTask(text);
+  tasks.unshift(task);
+  input.value = "";
+  save();
+  render();
+  list.querySelector(`[data-id="${task.id}"]`)?.classList.add("entering");
+});
+
+list.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-action]");
+  const id = button?.closest(".task")?.dataset.id;
+  if (!id) return;
+  if (button.dataset.action === "toggle") {
+    const task = tasks.find((candidate) => candidate.id === id);
+    task.done = !task.done;
+    save();
+    render();
   } else {
-    fillElement.classList.remove("indeterminate");
-    fillElement.style.width = `${percent}%`;
-    trackElement.setAttribute("aria-valuenow", String(Math.round(percent)));
-  }
-}
-
-function renderProgress(event) {
-  switch (event.phase) {
-    case "checking":
-      showPhase("Checking for updates…");
-      break;
-    case "found":
-      targetVersion = event.version;
-      showPhase(`Update ${event.version} found`, { detail: "Preparing download…" });
-      break;
-    case "downloading": {
-      const label = targetVersion ? `Downloading ${targetVersion}` : "Downloading update";
-      if (event.total) {
-        const percent = Math.min(100, (event.downloaded / event.total) * 100);
-        showPhase(label, {
-          percent,
-          size: `Update size: ${formatBytes(event.total)}`,
-          detail: `${formatBytes(event.downloaded)} of ${formatBytes(event.total)} · ${Math.floor(percent)}%`,
-        });
-      } else {
-        showPhase(label, {
-          size: event.downloaded ? formatBytes(event.downloaded) : "",
-          detail: event.downloaded ? `${formatBytes(event.downloaded)} received` : "Connecting…",
-        });
-      }
-      break;
-    }
-    case "reconstructing":
-      showPhase("Rebuilding installer from patch…", { size: sizeElement.textContent });
-      break;
-    case "verifying":
-      showPhase("Verifying signature…", { size: sizeElement.textContent });
-      break;
-    case "installing":
-      showPhase("Installing — the app will restart", { percent: 100, size: sizeElement.textContent });
-      break;
-  }
-}
-
-async function loadAppInfo() {
-  try {
-    const info = await invoke("app_info");
-    versionElement.textContent = info.version;
-    buildLabelElement.textContent = info.buildLabel;
-    statusElement.textContent = info.lastResult;
-    if (info.lastResult.startsWith(`Updated to ${info.version}`)) {
-      updatedBadgeElement.textContent = `✓ Updated to ${info.version}`;
-      updatedBadgeElement.hidden = false;
-    }
-  } catch (error) {
-    statusElement.textContent = `error: ${error}`;
-  }
-}
-
-listen("update-progress", ({ payload }) => renderProgress(payload));
-
-checkButton.addEventListener("click", async () => {
-  checkButton.disabled = true;
-  targetVersion = "";
-  statusElement.textContent = "";
-  showPhase("Checking for updates…");
-
-  try {
-    statusElement.textContent = await invoke("check_for_updates");
-  } catch (error) {
-    statusElement.textContent = String(error);
-  } finally {
-    progressElement.hidden = true;
-    checkButton.disabled = false;
+    removeWithAnimation([id]);
   }
 });
 
-loadAppInfo();
+clearDone.addEventListener("click", () =>
+  removeWithAnimation(tasks.filter((task) => task.done).map((task) => task.id)),
+);
+
+function showToast(message) {
+  toast.textContent = message;
+  toast.hidden = false;
+  requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add("visible")));
+  setTimeout(() => {
+    toast.classList.remove("visible");
+    setTimeout(() => (toast.hidden = true), 400);
+  }, 6000);
+}
+
+function announceUpdate(record) {
+  if (!record || record.seen) return;
+  const percent = savingsPercent(record.downloaded, record.fullSize);
+  const size =
+    percent !== null
+      ? `downloaded ${formatBytes(record.downloaded)} instead of ${formatBytes(record.fullSize)}`
+      : `downloaded ${formatBytes(record.downloaded)}`;
+  showToast(`Updated from ${record.from} to ${record.to} · ${size}`);
+  invoke("acknowledge_update");
+}
+
+async function start() {
+  document.querySelector("#today").textContent = new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
+  const [info, saved] = await Promise.all([invoke("app_info"), invoke("load_todos")]);
+  document.querySelector("#version").textContent = info.version;
+
+  try {
+    tasks = saved ? JSON.parse(saved) : null;
+  } catch {
+    tasks = null;
+  }
+  if (!Array.isArray(tasks)) {
+    tasks = STARTER_TASKS.map((text) => newTask(text));
+    save();
+  }
+  render();
+  announceUpdate(info.lastUpdate);
+  initUpdater(info.version);
+}
+
+start();

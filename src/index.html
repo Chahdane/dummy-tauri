@@ -5,36 +5,143 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DummyTauri</title>
     <link rel="stylesheet" href="styles.css" />
-    <script type="module" src="main.js" defer></script>
+    <script type="module" src="main.js"></script>
   </head>
   <body>
-    <main class="card">
-      <img class="logo" src="icon-source.png" alt="DummyTauri updater icon" />
-      <p class="eyebrow">TAURI DELTA UPDATER</p>
-      <h1>DummyTauri</h1>
-      <p id="updated-badge" class="updated-badge" hidden></p>
-      <dl>
+    <div class="app">
+      <header class="header">
         <div>
-          <dt>Version</dt>
-          <dd id="version">Loading…</dd>
+          <p class="date" id="today"></p>
+          <h1>My Tasks</h1>
         </div>
-        <div>
-          <dt>Build</dt>
-          <dd id="build-label">Loading…</dd>
+        <span class="version-chip">v<span id="version">…</span></span>
+      </header>
+
+      <button id="update-banner" class="update-banner" type="button" hidden>
+        <span class="banner-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" /></svg>
+        </span>
+        <span class="banner-text">
+          <strong>Version <span data-bind="banner-version"></span> is available</strong>
+          <span id="banner-size"></span>
+        </span>
+        <span class="banner-cta">Update</span>
+      </button>
+
+      <form id="composer" class="composer" autocomplete="off">
+        <input
+          id="composer-input"
+          type="text"
+          placeholder="Add a new task…"
+          maxlength="140"
+          aria-label="New task"
+        />
+        <button type="submit" class="add-btn">Add</button>
+      </form>
+
+      <ul id="task-list" class="task-list" aria-label="Tasks"></ul>
+      <p id="empty" class="empty" hidden>Nothing left to do. Enjoy your day!</p>
+
+      <footer class="footer">
+        <span id="remaining"></span>
+        <button id="clear-done" class="link-btn" type="button">Clear completed</button>
+      </footer>
+
+      <div class="update-footer">
+        <button id="check-updates" class="check-btn" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4h-4" />
+          </svg>
+          Check for updates
+        </button>
+      </div>
+    </div>
+
+    <div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
+    <section
+      id="update-sheet"
+      class="sheet"
+      data-view="checking"
+      role="dialog"
+      aria-live="polite"
+      hidden
+    >
+      <div class="view view-checking">
+        <div class="spinner" aria-hidden="true"></div>
+        <h2>Checking for updates…</h2>
+      </div>
+
+      <div class="view view-latest">
+        <div class="badge-icon ok" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
         </div>
-      </dl>
-      <button id="check-updates" type="button">Check for updates</button>
-      <section id="progress" class="progress" hidden>
-        <div class="progress-head">
-          <span id="progress-phase">Checking for updates…</span>
-          <span id="progress-size"></span>
+        <h2>You're up to date</h2>
+        <p class="sheet-sub">DummyTauri <span data-bind="current"></span> is the latest version.</p>
+        <div class="sheet-actions single">
+          <button class="primary-btn" type="button" data-action="close">Done</button>
         </div>
-        <div class="track" role="progressbar" aria-labelledby="progress-phase">
-          <div id="progress-fill" class="fill indeterminate"></div>
+      </div>
+
+      <div class="view view-available">
+        <p class="sheet-eyebrow"><span data-bind="kind"></span> ready</p>
+        <h2>Update to <span data-bind="version"></span></h2>
+        <p class="sheet-sub">You're on version <span data-bind="current"></span></p>
+        <div class="compare">
+          <div class="compare-row">
+            <span class="compare-label">This update</span>
+            <div class="compare-track"><div id="cmp-patch" class="compare-fill patch"></div></div>
+            <span class="compare-value strong" data-bind="download"></span>
+          </div>
+          <div class="compare-row">
+            <span class="compare-label">Full app</span>
+            <div class="compare-track"><div class="compare-fill full"></div></div>
+            <span class="compare-value" data-bind="full"></span>
+          </div>
         </div>
-        <p id="progress-detail" class="progress-detail"></p>
-      </section>
-      <p id="status" role="status" aria-live="polite">Loading last result…</p>
-    </main>
+        <p class="savings"><strong data-bind="percent"></strong> smaller than downloading the whole app</p>
+        <div class="sheet-actions">
+          <button class="ghost-btn" type="button" data-action="close">Later</button>
+          <button class="primary-btn" type="button" data-action="install">Update now</button>
+        </div>
+      </div>
+
+      <div class="view view-installing">
+        <p class="sheet-eyebrow">Updating</p>
+        <h2>Installing <span data-bind="version"></span></h2>
+        <ol class="steps">
+          <li data-step="download"><span class="step-dot"></span>Download update</li>
+          <li data-step="rebuild"><span class="step-dot"></span>Rebuild installer</li>
+          <li data-step="verify"><span class="step-dot"></span>Verify signature</li>
+          <li data-step="install"><span class="step-dot"></span>Install &amp; restart</li>
+        </ol>
+        <div class="dl-track"><div id="dl-fill" class="dl-fill"></div></div>
+        <div class="dl-meta">
+          <span id="dl-bytes"></span>
+          <span id="dl-note"></span>
+        </div>
+      </div>
+
+      <div class="view view-restarting">
+        <div class="badge-icon ok big" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path class="draw" d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+        </div>
+        <h2>Update installed</h2>
+        <p class="sheet-sub">Restarting into version <span data-bind="version"></span>…</p>
+      </div>
+
+      <div class="view view-error">
+        <div class="badge-icon err" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 7v6m0 4h.01" /></svg>
+        </div>
+        <h2>Update didn't complete</h2>
+        <p id="error-text" class="sheet-sub error-text"></p>
+        <div class="sheet-actions">
+          <button class="ghost-btn" type="button" data-action="close">Close</button>
+          <button class="primary-btn" type="button" data-action="retry">Try again</button>
+        </div>
+      </div>
+    </section>
+
+    <div id="toast" class="toast" role="status" hidden></div>
   </body>
 </html>
