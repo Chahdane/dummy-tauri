@@ -1,6 +1,6 @@
 # DummyTauri
 
-DummyTauri is a minimal Tauri v2 desktop app demonstrating signed differential updates with [`tauri-plugin-updater-delta`](https://github.com/Chahdane/tauri-updater). The official Tauri updater still checks and installs each release; the delta plugin reconstructs and verifies an exact installer when a usable cached predecessor exists, then falls back to a full download on ordinary delta failures.
+DummyTauri is a small Tauri v2 todo app that demonstrates signed differential updates with [`tauri-plugin-updater-delta`](https://github.com/Chahdane/tauri-updater). Before downloading, the update sheet shows how small the patch is compared with the full installer. The official Tauri updater still checks and installs each release; the delta plugin reconstructs and verifies an exact installer when a usable cached predecessor exists, then falls back to a full download on ordinary delta failures.
 
 ## Local development
 
@@ -36,7 +36,7 @@ https://github.com/Chahdane/dummy-tauri/releases/latest/download/manifest.json
 
 Push a tag named `app-vX.Y.Z` after making the version in `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` match. The release workflow builds an Apple Silicon macOS app and a Windows x86_64 NSIS installer. macOS publishes direct and tar-layer patches when a predecessor is available. Windows publishes a direct patch only when it is smaller than 30% of the full installer.
 
-The first update on a new installation is always Full because no prior official updater artifact has been cached. A successful launch promotes that artifact to the active cache base, allowing a later compatible release to use TarDelta on macOS or DirectDelta on Windows.
+A new installation has no cached updater artifact, but the first update can still be a delta. On Windows the NSIS hook in `src-tauri/windows/delta-seed.nsh` keeps the installer beside the app as a DirectDelta base. On macOS the plugin rebuilds the TarDelta base from the installed `.app`. When neither base matches, the update falls back to Full. A successful launch promotes the installed artifact to the cache base for later releases.
 
 The workflow requires these repository secrets:
 
