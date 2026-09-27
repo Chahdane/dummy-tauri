@@ -215,11 +215,13 @@ async fn check_for_update(
 
     // The delta check keeps Tauri's manifest private; the official updater
     // exposes it, including the delta section with patch and full sizes.
+    // `Update::target` is only the OS ("windows"), while the delta section is
+    // keyed by the full platform ("windows-x86_64").
     let sizes = match app.updater() {
         Ok(updater) => match updater.check().await {
             Ok(Some(official)) => estimate(
                 &official.raw_json,
-                &official.target,
+                &tauri_plugin_updater::target().unwrap_or(official.target),
                 update.current_version(),
             ),
             _ => (None, None, "full"),

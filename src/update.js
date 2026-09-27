@@ -74,7 +74,7 @@ function describeAvailable(info) {
   bind(
     "kind",
     info.kind === "patch"
-      ? "Delta patch"
+      ? "Delta update"
       : info.kind === "compressed"
         ? "Compressed download"
         : "Full download",
