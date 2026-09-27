@@ -8,13 +8,33 @@
     <script type="module" src="main.js"></script>
   </head>
   <body>
+    <div class="aurora" aria-hidden="true">
+      <span class="blob one"></span>
+      <span class="blob two"></span>
+      <span class="blob three"></span>
+    </div>
+
     <div class="app">
-      <header class="header">
-        <div>
+      <header class="hero">
+        <div class="hero-text">
+          <p class="greeting" id="greeting"></p>
+          <h1>Today's focus</h1>
           <p class="date" id="today"></p>
-          <h1>My Tasks</h1>
+          <span class="version-chip"><span class="spark"></span>v<span id="version">…</span></span>
         </div>
-        <span class="version-chip">v<span id="version">…</span></span>
+        <div class="ring" aria-hidden="true">
+          <svg viewBox="0 0 100 100">
+            <defs>
+              <linearGradient id="ring-gradient" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#f0abfc" />
+                <stop offset="1" stop-color="#818cf8" />
+              </linearGradient>
+            </defs>
+            <circle class="ring-track" cx="50" cy="50" r="42" />
+            <circle id="ring-value" class="ring-value" cx="50" cy="50" r="42" pathLength="100" />
+          </svg>
+          <div class="ring-label"><strong id="ring-percent">0%</strong><span>done</span></div>
+        </div>
       </header>
 
       <button id="update-banner" class="update-banner" type="button" hidden>
@@ -29,32 +49,42 @@
       </button>
 
       <form id="composer" class="composer" autocomplete="off">
+        <span class="composer-plus" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
+        </span>
         <input
           id="composer-input"
           type="text"
-          placeholder="Add a new task…"
+          placeholder="What do you want to get done?"
           maxlength="140"
           aria-label="New task"
         />
-        <button type="submit" class="add-btn">Add</button>
+        <kbd>Enter</kbd>
       </form>
 
+      <nav class="filters" aria-label="Filter tasks">
+        <button type="button" data-filter="all" class="active">All <span id="count-all"></span></button>
+        <button type="button" data-filter="active">Active <span id="count-active"></span></button>
+        <button type="button" data-filter="done">Done <span id="count-done"></span></button>
+        <span class="filter-glider" aria-hidden="true"></span>
+      </nav>
+
       <ul id="task-list" class="task-list" aria-label="Tasks"></ul>
-      <p id="empty" class="empty" hidden>Nothing left to do. Enjoy your day!</p>
+      <div id="empty" class="empty" hidden>
+        <div class="empty-art" aria-hidden="true">✦</div>
+        <p id="empty-text">All clear. Time for a coffee.</p>
+      </div>
 
       <footer class="footer">
         <span id="remaining"></span>
         <button id="clear-done" class="link-btn" type="button">Clear completed</button>
-      </footer>
-
-      <div class="update-footer">
-        <button id="check-updates" class="check-btn" type="button">
+        <button id="check-updates" class="check-btn" type="button" title="Check for updates">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4h-4" />
           </svg>
-          Check for updates
+          Updates
         </button>
-      </div>
+      </footer>
     </div>
 
     <div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
@@ -67,8 +97,8 @@
       hidden
     >
       <div class="view view-checking">
-        <div class="spinner" aria-hidden="true"></div>
-        <h2>Checking for updates…</h2>
+        <div class="orbit" aria-hidden="true"><span></span></div>
+        <h2>Looking for updates…</h2>
       </div>
 
       <div class="view view-latest">
@@ -78,7 +108,7 @@
         <h2>You're up to date</h2>
         <p class="sheet-sub">DummyTauri <span data-bind="current"></span> is the latest version.</p>
         <div class="sheet-actions single">
-          <button class="primary-btn" type="button" data-action="close">Done</button>
+          <button class="primary-btn" type="button" data-action="close">Nice</button>
         </div>
       </div>
 
@@ -142,6 +172,32 @@
       </div>
     </section>
 
-    <div id="toast" class="toast" role="status" hidden></div>
+    <div id="welcome" class="welcome" hidden>
+      <canvas id="confetti" class="confetti"></canvas>
+      <div class="welcome-card" role="dialog" aria-labelledby="welcome-title">
+        <div class="welcome-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path class="draw" d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+        </div>
+        <p class="sheet-eyebrow">Update complete</p>
+        <h2 id="welcome-title">Welcome to <span id="welcome-version"></span></h2>
+        <p class="welcome-path">
+          <span id="welcome-from" class="pill old"></span>
+          <span class="arrow">→</span>
+          <span id="welcome-to" class="pill new"></span>
+        </p>
+        <div class="welcome-stat">
+          <strong id="welcome-downloaded"></strong>
+          <span id="welcome-compare"></span>
+        </div>
+        <ul class="whats-new">
+          <li><span>🎨</span>A fresh aurora design</li>
+          <li><span>◔</span>Progress ring for your day</li>
+          <li><span>⌁</span>Filter by all, active, or done</li>
+          <li><span>✎</span>Double-click a task to edit it</li>
+        </ul>
+        <p class="welcome-note">Your tasks came along for the ride.</p>
+        <button id="welcome-close" class="primary-btn" type="button">Let's go</button>
+      </div>
+    </div>
   </body>
 </html>
